@@ -65,6 +65,9 @@ export function InAppDashboard({
     if (logs.length > 0 && clearedLogs) {
       setClearedLogs(false);
     }
+    if (logContainerRef.current) {
+      logContainerRef.current.scrollTop = 0;
+    }
   }, [logs.length, clearedLogs]);
 
   const displayedLogs = clearedLogs ? [] : logs;

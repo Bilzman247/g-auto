@@ -34,5 +34,5 @@ export default function RiseFallPage() {
     };
   }, []);
 
-  return <LiveRiseFall appConfig={config} defaultTab="bot" />;
+  return <LiveRiseFall appConfig={config} defaultTab="dashboard" />;
 }

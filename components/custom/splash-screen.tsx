@@ -10,6 +10,7 @@ interface SplashScreenProps {
 /**
  * Deriv-style clean splash screen.
  * Displays for exactly 6 seconds on initial load, then automatically opens the dashboard.
+ * - Uses session storage to ensure it displays once per session (preventing re-triggering loops on navigation).
  * - Uses the app logo
  * - Rounded logo
  * - Spinning ring around the logo in the main app primary color
@@ -21,13 +22,23 @@ interface SplashScreenProps {
  */
 export function SplashScreen({ logoSrc }: SplashScreenProps) {
   const router = useRouter();
-  const [isVisible, setIsVisible] = useState(true);
+  const [isVisible, setIsVisible] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return sessionStorage.getItem('g_squad_splash_shown') !== 'true';
+  });
   const [isFadingOut, setIsFadingOut] = useState(false);
   const [imgError, setImgError] = useState(false);
-  const hasNavigatedRef = useRef(false);
+  const hasCompletedRef = useRef(false);
 
   useEffect(() => {
-    // Prefetch dashboard early so the transition is instant
+    if (!isVisible) return;
+
+    try {
+      sessionStorage.setItem('g_squad_splash_shown', 'true');
+    } catch {
+      // ignore
+    }
+
     try {
       router.prefetch('/dashboard');
     } catch {
@@ -38,29 +49,25 @@ export function SplashScreen({ logoSrc }: SplashScreenProps) {
     const FADE_START_MS = 5400; // Smooth 600ms fade-out transition
     const startTimestamp = Date.now();
 
-    // Trigger smooth fade-out slightly before 6s
     const fadeTimer = setTimeout(() => {
       setIsFadingOut(true);
     }, FADE_START_MS);
 
-    // Complete splash screen and transition to dashboard at exactly 6s
     const completeSplash = () => {
+      if (hasCompletedRef.current) return;
+      hasCompletedRef.current = true;
       setIsFadingOut(true);
       setIsVisible(false);
 
-      if (!hasNavigatedRef.current) {
-        hasNavigatedRef.current = true;
-        if (typeof window !== 'undefined') {
-          if (!window.location.pathname.includes('/dashboard')) {
-            router.replace('/dashboard');
-          }
+      if (typeof window !== 'undefined') {
+        if (!window.location.pathname.includes('/dashboard')) {
+          router.replace('/dashboard');
         }
       }
     };
 
     const removeTimer = setTimeout(completeSplash, DURATION_MS);
 
-    // Safeguard: Ensure splash screen never hangs or loads indefinitely if timer is throttled
     const intervalGuard = setInterval(() => {
       if (Date.now() - startTimestamp >= DURATION_MS) {
         completeSplash();
@@ -72,7 +79,7 @@ export function SplashScreen({ logoSrc }: SplashScreenProps) {
       clearTimeout(removeTimer);
       clearInterval(intervalGuard);
     };
-  }, [router]);
+  }, [isVisible, router]);
 
   if (!isVisible) {
     return null;
