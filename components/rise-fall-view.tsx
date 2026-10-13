@@ -2,21 +2,24 @@
 
 import dynamic from 'next/dynamic';
 import { Localize } from '@deriv-com/translations';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Footer, FooterBar } from '@/components/custom/footer';
 import { Header } from '@/components/custom/header';
 import { LoginPromptDialog } from '@/components/custom/login-prompt-dialog';
-import { PinnedBuyBar } from '@/components/custom/pinned-buy-bar';
 import { useAppTranslations } from '@/components/custom/i18n-provider';
 import { SymbolSelector } from '@/components/custom/symbol-selector';
 import { ThemeToggle } from '@/components/custom/theme-toggle';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useIsMobile } from '@/hooks/use-is-mobile';
 import { useContractMarkers } from '@/hooks/use-contract-markers';
-import { useCallback, useMemo, useState, type CSSProperties } from 'react';
-import { Ban } from 'lucide-react';
-import { TradeControls } from './trade-controls';
-import { ConfigurableTradeControls, ConfigurableBuyButton } from './configurable-trade-controls';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { Ban, Play, Square, Bot, BarChart2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useAutoTradingBot } from '@/hooks/use-auto-trading-bot';
+import { AutoBotControls } from './auto-bot-controls';
+import { AppBottomNavbar } from '@/components/custom/app-bottom-navbar';
+import { InAppDashboard } from '@/components/custom/in-app-dashboard';
+import { InAppReports } from '@/components/custom/in-app-reports';
 import type { RiseFallAppConfig } from '../lib/app-config';
 
 /**
@@ -68,17 +71,9 @@ import type {
   BuyResult,
   DerivWS,
 } from '@deriv/core';
-import type { Direction, DurationSelectUnit, DurationOption } from '../lib/types';
+import type { Direction, DurationSelectUnit, DurationOption, OpenPosition } from '../lib/types';
 import type { UseSmartChartsApiReturn } from '@/hooks/use-smartcharts-api';
-import type { SmartChartChartData } from '@/hooks/use-smartchart-chart-data';
-import type { OpenPosition } from '../lib/types';
-
-const RiseFallChart = dynamic(() => import('./rise-fall-chart').then(module => module.RiseFallChart), {
-  ssr: false,
-  loading: () => (
-    <div className="h-full w-full animate-pulse rounded-md border border-border/50 dark:border-white/[0.08] bg-muted/30" />
-  ),
-});
+import { LightweightTickChart } from './lightweight-tick-chart';
 
 // Edit-mode stand-in for the login prompt's auth handlers — same rule as the
 // header: no OAuth navigation out of the editor.
@@ -91,8 +86,10 @@ export interface RiseFallViewProps {
   activeAccount: DerivAccount | null;
   onLogin: () => Promise<void>;
   onSignUp: () => Promise<void>;
+  onLoginAsDemo?: () => void;
   onLogout: () => void;
   onSwitchAccount: (accountId: string) => Promise<void>;
+  defaultTab?: 'bot' | 'dashboard' | 'reports';
 
   // Connection / loading
   ws: DerivWS | null;
@@ -137,11 +134,11 @@ export interface RiseFallViewProps {
   sellContract: (contractId: number, bidPrice: string) => Promise<void>;
   sellingId: number | null;
 
-  // Chart data (elevated to page so preview can inject frozen mocks)
-  chartData: SmartChartChartData | undefined;
-  getQuotes: UseSmartChartsApiReturn['getQuotes'];
-  subscribeQuotes: UseSmartChartsApiReturn['subscribeQuotes'];
-  unsubscribeQuotes: UseSmartChartsApiReturn['unsubscribeQuotes'];
+  // Chart data (optional, smartcharts removed for speed and stability)
+  chartData?: any;
+  getQuotes?: any;
+  subscribeQuotes?: any;
+  unsubscribeQuotes?: any;
   /** Passed to SmartChart. Set to false for a frozen preview. Defaults to true. */
   isLive?: boolean;
   /**
@@ -179,8 +176,10 @@ export function RiseFallView({
   activeAccount,
   onLogin,
   onSignUp,
+  onLoginAsDemo,
   onLogout,
   onSwitchAccount,
+  defaultTab,
   ws,
   isConnected,
   isLoading,
@@ -253,22 +252,38 @@ export function RiseFallView({
   const inFlowFooter = !!appConfig && isMobile;
   const contractMarkers = useContractMarkers(openPositions, activeSymbol?.underlying_symbol, isMobile);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [activeTab, setActiveTab] = useState<'bot' | 'dashboard' | 'reports'>(defaultTab ?? 'bot');
 
-  // Logged-out Buy opens the login/sign-up prompt instead of sending a buy that
-  // would fail with a "Purchase Failed" toast. One gate covers every Buy
-  // surface (standard, configurable, pinned). Edit mode stays inert — the
-  // editor owns Buy clicks there, and its auth actions are already no-ops.
-  const handleBuy = useCallback(async () => {
-    if (editMode) return;
-    // Mid-OAuth (the ?code= callback) the header already shows a login in
-    // progress — don't stack a "please log in" prompt on top of it.
-    if (authState === 'authenticating') return;
-    if (authState !== 'authenticated') {
-      setShowLoginPrompt(true);
-      return;
+  useEffect(() => {
+    if (defaultTab && defaultTab !== activeTab) {
+      setActiveTab(defaultTab);
     }
-    await buyContract();
-  }, [editMode, authState, buyContract]);
+  }, [defaultTab]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      if (typeof window === 'undefined') return;
+      const path = window.location.pathname;
+      if (path.includes('dashboard')) {
+        setActiveTab('dashboard');
+      } else if (path.includes('reports')) {
+        setActiveTab('reports');
+      } else {
+        setActiveTab('bot');
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const bot = useAutoTradingBot({
+    ws,
+    isConnected,
+    isAuthenticated: authState === 'authenticated',
+    activeSymbol,
+    prices: prices ?? [],
+    onRequireAuth: () => setShowLoginPrompt(true),
+  });
 
   // In edit mode, login/sign-up/account actions are inert (no OAuth navigation
   // out of the editor) — only the theme toggle stays interactive.
@@ -280,8 +295,9 @@ export function RiseFallView({
         authState={authState}
         accounts={accounts}
         activeAccount={activeAccount}
-        onLogin={editMode ? noopAsync : onLogin}
-        onSignUp={editMode ? noopAsync : onSignUp}
+        onLogin={editMode ? noopAsync : async () => setShowLoginPrompt(true)}
+        onSignUp={editMode ? noopAsync : async () => setShowLoginPrompt(true)}
+        onLoginAsDemo={editMode ? noop : onLoginAsDemo}
         onLogout={editMode ? noop : onLogout}
         onSwitchAccount={editMode ? noopAsync : onSwitchAccount}
         logoSrc={logoSrc}
@@ -297,6 +313,7 @@ export function RiseFallView({
     editMode,
     onLogin,
     onSignUp,
+    onLoginAsDemo,
     onLogout,
     onSwitchAccount,
     logoSrc,
@@ -308,79 +325,23 @@ export function RiseFallView({
   // and as a reorderable block in the no-code layout. When the chart is hidden,
   // the SmartChart is NOT mounted at all (so nothing bleeds through) and a
   // standalone Symbol Selector takes its place so users can still switch markets.
+  // Lightweight tick chart with symbol selector, live price metrics, and SVG pulse
   const chartBlock = useMemo(
-    () =>
-      chartHidden ? (
-        <div className="rf-chart-hidden relative">
-          <div className={editMode ? 'pointer-events-none select-none' : ''}>
-            <SymbolSelector
-              symbols={symbols}
-              activeSymbol={activeSymbol}
-              onSymbolChange={selectSymbol}
-              prices={prices}
-              pipSize={pipSize}
-            />
-          </div>
-          {editMode && !rearrangeMode && (
-            <FixedZone label={localize('Symbol picker')} style={{ top: 0, bottom: 0 }} />
-          )}
-        </div>
-      ) : (
-        <div className="relative max-lg:h-[45dvh] lg:h-[min(33.6rem,66vh)] lg:min-h-[384px]">
-          <div className={`h-full ${editMode ? 'pointer-events-none select-none' : ''}`}>
-            {chartData ? (
-              <RiseFallChart
-                symbolKey="rise-fall-chart"
-                symbol={activeSymbol?.underlying_symbol}
-                isConnectionOpened={isConnected}
-                isMobile={isMobile}
-                chartData={chartData}
-                getQuotes={getQuotes}
-                subscribeQuotes={subscribeQuotes}
-                unsubscribeQuotes={unsubscribeQuotes}
-                onSymbolChange={selectSymbol}
-                isLive={isLive}
-                endEpoch={endEpoch}
-                contractsArray={contractMarkers}
-              />
-            ) : (
-              <Skeleton className="h-full w-full rounded-md" />
-            )}
-          </div>
-
-          {editMode && !rearrangeMode && (
-            <>
-              <FixedZone label={localize('Symbol picker')} style={{ top: 0, height: 54 }} />
-              <FixedZone label={localize('Chart')} style={{ top: 54, bottom: 0 }} />
-            </>
-          )}
-        </div>
-      ),
-    [
-      chartHidden,
-      symbols,
-      prices,
-      pipSize,
-      editMode,
-      chartData,
-      activeSymbol,
-      isConnected,
-      isMobile,
-      getQuotes,
-      subscribeQuotes,
-      unsubscribeQuotes,
-      selectSymbol,
-      isLive,
-      endEpoch,
-      contractMarkers,
-      rearrangeMode,
-      localize,
-    ]
+    () => (
+      <LightweightTickChart
+        symbols={symbols}
+        activeSymbol={activeSymbol}
+        onSymbolChange={selectSymbol}
+        prices={prices}
+        pipSize={pipSize}
+      />
+    ),
+    [symbols, activeSymbol, selectSymbol, prices, pipSize]
   );
 
   if (error) {
     return (
-      <main className="flex flex-col bg-background items-center justify-center px-4 min-h-dvh">
+      <main className="flex flex-col bg-background items-center justify-center px-4 h-full">
         <Card className="max-w-md w-full">
           <CardHeader>
             <CardTitle className="text-destructive">
@@ -395,192 +356,98 @@ export function RiseFallView({
     );
   }
 
-  // The configurable controls. `withChart` includes the chart as a reorderable
-  // block in the single column (mobile); on desktop the chart is its own column,
-  // so it's omitted here.
-  const renderConfigurable = (withChart: boolean) =>
-    appConfig ? (
-      <ConfigurableTradeControls
-        config={appConfig}
-        chartSlot={withChart ? chartBlock : undefined}
-        direction={direction}
-        onDirectionChange={setDirection}
-        allowEquals={allowEquals}
-        onAllowEqualsChange={setAllowEquals}
-        isConnected={isConnected}
-        stake={stake}
-        onStakeChange={setStake}
-        duration={duration}
-        onDurationChange={setDuration}
-        durationOptions={durationOptions}
-        durationUnit={durationUnit}
-        onDurationUnitChange={setDurationUnit}
-        endDate={endDate}
-        onEndDateChange={setEndDate}
-        endTime={endTime}
-        onEndTimeChange={setEndTime}
-        ws={ws}
-        activeSymbol={activeSymbol}
-        proposal={proposal}
-        onBuy={handleBuy}
-        isBuying={isBuying}
-        buyResult={buyResult}
-        buyError={buyError}
-        onClearBuyResult={clearBuyResult}
-        isAuthenticated={authState === 'authenticated'}
-        editMode={editMode}
-        onSelect={onSelect}
-        selectedKey={selectedKey}
-        rearrangeMode={rearrangeMode}
-        onReorder={onReorder}
-        pinBuy={pinBuy}
-      />
-    ) : null;
-
   return (
-    <main
-      className={`flex flex-col max-lg:h-dvh lg:overflow-visible ${
-        editMode ? 'bg-muted/50' : 'bg-background'
-      }`}
-    >
-      {editMode ? (
-        <div className="group/hdr sticky top-0 z-50">
-          {headerEl}
-          {/* Hover hint: a ring + a LEFT-aligned chip so it never covers the
-              right-side theme toggle (which stays usable). pointer-events-none
-              so nothing here blocks clicks. */}
-          <div className="pointer-events-none absolute inset-0 z-[60] opacity-0 ring-2 ring-inset ring-muted-foreground/25 transition-opacity group-hover/hdr:opacity-100">
-            <span className="absolute left-3 top-1/2 flex -translate-y-1/2 items-center gap-1.5 rounded-md bg-background/90 px-2 py-1 text-[11px] font-medium text-muted-foreground shadow-sm ring-1 ring-border">
-              <Ban className="h-3.5 w-3.5" />
-              <Localize i18n_default_text="Not editable" />
-            </span>
-          </div>
-        </div>
-      ) : (
-        headerEl
-      )}
+    <main className="flex flex-col h-full w-full overflow-hidden bg-background">
+      {/* 1. FIXED TOP APP HEADER - NEVER MOVES WITH SCROLL */}
+      <div className="shrink-0 z-40 w-full border-b border-border bg-background">
+        {headerEl}
+      </div>
 
-      {appConfig ? (
-        isMobile ? (
-          /* No-code mobile layout: a single, reorderable column of blocks. The
-             chart + symbol dropdown is one block (chartSlot); controls follow
-             the configured order. */
-          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
-            <div className="mx-auto flex w-full max-w-md flex-col gap-3 px-3 py-3">
-              {isLoading ? <Skeleton className="h-48 w-full rounded-xl" /> : renderConfigurable(true)}
-            </div>
-          </div>
-        ) : chartHidden ? (
-          /* No-code desktop, chart OFF: a single centered column (symbol picker
-             + controls stacked) at the controls' width — no wide empty chart
-             column, and the height grows to fit its content (no inner scroll). */
-          <div className="mx-auto flex w-full max-w-md flex-col gap-3 px-4 py-4">
+      {/* 2. SCROLLABLE PAGE CONTENT - ONLY THIS SCROLLS SMOOTHLY */}
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-3 space-y-3 pb-8">
+        {activeTab === 'bot' && (
+          <>
+            {chartBlock}
             {isLoading ? (
-              <Skeleton className="h-96 w-full rounded-xl" />
+              <Skeleton className="h-48 w-full rounded-xl" />
             ) : (
-              renderConfigurable(true)
+              <AutoBotControls
+                bot={bot}
+                isConnected={isConnected}
+                isAuthenticated={authState === 'authenticated'}
+                activeSymbol={activeSymbol}
+                durationOptions={durationOptions}
+                onOpenLogin={() => setShowLoginPrompt(true)}
+                onSwitchToReports={() => {
+                  setActiveTab('reports');
+                  if (typeof window !== 'undefined') {
+                    window.history.replaceState(null, '', '/reports');
+                  }
+                }}
+              />
             )}
-          </div>
-        ) : (
-          /* No-code desktop, chart ON: 2-column (chart left, controls card
-             right). The card grows to its content height (no fixed height /
-             inner scrollbar) — desktop has the vertical space. */
-          <div className="flex w-full max-w-7xl mx-auto flex-col px-4 py-4 gap-3">
-            <div className="grid grid-cols-[1fr_400px] gap-4 items-start">
-              <div>{chartBlock}</div>
-              {isLoading ? (
-                <Skeleton className="h-[min(33.6rem,66vh)] min-h-[384px] w-full rounded-xl" />
-              ) : (
-                <Card>
-                  <CardContent className="pt-4">{renderConfigurable(false)}</CardContent>
-                </Card>
-              )}
-            </div>
-          </div>
-        )
-      ) : (
-        /* Standard layout (unchanged): 2-column chart + controls card. */
-        <div className="flex w-full max-w-7xl mx-auto flex-col max-lg:px-0 max-lg:py-0 px-3 py-2 sm:px-4 sm:py-4 gap-2 sm:gap-3 max-lg:flex-1 max-lg:min-h-0 max-lg:overflow-hidden lg:flex-none lg:overflow-visible">
-          <div className="max-lg:flex max-lg:flex-col max-lg:flex-1 max-lg:min-h-0 lg:grid lg:grid-cols-[1fr_400px] lg:gap-4">
-            <div className="max-lg:shrink-0 flex flex-col gap-2 max-lg:px-3 max-lg:pb-2 pt-2 lg:py-0">
-              {chartBlock}
-            </div>
-            <div className="max-lg:flex-1 max-lg:min-h-0 max-lg:overflow-y-auto max-lg:overscroll-contain max-lg:px-3 max-lg:border-t max-lg:border-border max-lg:pt-3 max-lg:pb-28 lg:pt-0 flex flex-col gap-3">
-              {isLoading ? (
-                <Skeleton className="lg:h-[min(33.6rem,66vh)] lg:min-h-[384px] max-lg:h-48 w-full rounded-xl" />
-              ) : (
-                <Card className="lg:h-[min(33.6rem,66vh)] lg:min-h-[384px] lg:overflow-y-auto">
-                  <CardContent className="pt-4">
-                    <TradeControls
-                      direction={direction}
-                      onDirectionChange={setDirection}
-                      allowEquals={allowEquals}
-                      onAllowEqualsChange={setAllowEquals}
-                      isConnected={isConnected}
-                      stake={stake}
-                      onStakeChange={setStake}
-                      duration={duration}
-                      onDurationChange={setDuration}
-                      durationOptions={durationOptions}
-                      durationUnit={durationUnit}
-                      onDurationUnitChange={setDurationUnit}
-                      endDate={endDate}
-                      onEndDateChange={setEndDate}
-                      endTime={endTime}
-                      onEndTimeChange={setEndTime}
-                      ws={ws}
-                      activeSymbol={activeSymbol}
-                      proposal={proposal}
-                      onBuy={handleBuy}
-                      isBuying={isBuying}
-                      buyResult={buyResult}
-                      buyError={buyError}
-                      onClearBuyResult={clearBuyResult}
-                      isAuthenticated={authState === 'authenticated'}
-                    />
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
 
-      {pinBuy ? (
-        <PinnedBuyBar
-          editMode={editMode}
-          rearrangeMode={rearrangeMode}
-          selected={selectedKey === 'buy'}
-          onSelect={() => onSelect?.('buy')}
-          label={localize('Buy button')}
-        >
-          <ConfigurableBuyButton
-            variant={appConfig!.styles.buy}
-            isConnected={isConnected}
-            proposal={proposal}
-            onBuy={handleBuy}
-            isBuying={isBuying}
+        {activeTab === 'dashboard' && (
+          <InAppDashboard
+            bot={bot}
+            activeAccount={activeAccount}
+            isAuthenticated={authState === 'authenticated'}
+            onOpenLogin={() => setShowLoginPrompt(true)}
+            onSwitchToBot={() => {
+              setActiveTab('bot');
+              if (typeof window !== 'undefined') {
+                window.history.replaceState(null, '', '/');
+              }
+            }}
           />
-        </PinnedBuyBar>
-      ) : inFlowFooter ? (
-        /* Unpinned mobile: the same band the pinned bar ends in, minus the Buy
-           button — in flow at the end of the h-dvh column, so the scroll area
-           ends where it begins and nothing reserves clearance for it. Sharing
-           the band is what keeps the footer from moving when the pin toggles. */
-        <FooterBar />
-      ) : (
-        /* Fixed footer — desktop and the standard layout, which scroll the
-           document rather than an inner column. */
-        <div className="fixed bottom-0 left-0 right-0 py-2 text-center bg-background/80 backdrop-blur-sm">
-          <Footer />
-        </div>
-      )}
+        )}
+
+        {activeTab === 'reports' && (
+          <InAppReports
+            bot={bot}
+            openPositions={openPositions}
+            isAuthenticated={authState === 'authenticated'}
+            onOpenLogin={() => setShowLoginPrompt(true)}
+            onSwitchToBot={() => {
+              setActiveTab('bot');
+              if (typeof window !== 'undefined') {
+                window.history.replaceState(null, '', '/');
+              }
+            }}
+          />
+        )}
+      </div>
+
+      {/* 3. FIXED BOTTOM NAVBAR - NEVER MOVES WITH PAGE CONTENT */}
+      <AppBottomNavbar
+        isRunning={bot.isRunning}
+        sessionProfit={bot.sessionProfit}
+        onStartBot={() => {
+          if (authState !== 'authenticated') {
+            setShowLoginPrompt(true);
+          } else {
+            bot.startBot();
+          }
+        }}
+        onStopBot={() => bot.stopBot('Stopped from mobile navbar')}
+        activeTab={activeTab}
+        onTabChange={(tab) => {
+          setActiveTab(tab);
+          if (typeof window !== 'undefined') {
+            const nextPath = tab === 'bot' ? '/' : `/${tab}`;
+            window.history.replaceState(null, '', nextPath);
+          }
+        }}
+      />
 
       <LoginPromptDialog
         open={showLoginPrompt}
         onOpenChange={setShowLoginPrompt}
         onLogin={editMode ? noopAsyncAuth : onLogin}
         onSignUp={editMode ? noopAsyncAuth : onSignUp}
+        onLoginAsDemo={editMode ? undefined : onLoginAsDemo}
       />
     </main>
   );

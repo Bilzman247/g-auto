@@ -5,17 +5,11 @@ import { getLogoSrc } from '@/lib/get-logo-src';
 import { inter, FONT_CLASS_MAP } from '@/lib/fonts';
 import { TemplateLayout } from '@/components/custom/template-layout';
 import { LogoSrcProvider } from '@/components/custom/logo-src-provider';
+import { SplashScreen } from '@/components/custom/splash-screen';
 import { TemplateI18nProvider } from '../lib/i18n/provider';
-import '@/app/globals.css';
 import './globals.css';
-import '@deriv-com/smartcharts-champion/dist/smartcharts.css';
 import './custom.css';
 
-// SmartCharts declares `font-family: IBM Plex Sans, sans-serif` internally.
-// Loading the font here makes it available to those declarations so the chart
-// renders with its intended typeface instead of falling back to the system
-// sans-serif.  We apply the variable to <body> so the @font-face rules are
-// emitted; SmartCharts resolves the family name automatically.
 const ibmPlexSans = IBM_Plex_Sans({
   subsets: ['latin'],
   weight: ['300', '400', '500', '600', '700'],
@@ -25,9 +19,15 @@ const ibmPlexSans = IBM_Plex_Sans({
 
 export function generateMetadata(): Metadata {
   const faviconUri = buildFaviconUri();
+  const title = process.env.NEXT_PUBLIC_DERIV_APP_NAME?.trim() || 'Deriv Rise/Fall Trading App';
+  const description = 'A white-label trading application powered by Deriv';
   return {
-    title: process.env.NEXT_PUBLIC_DERIV_APP_NAME?.trim() || 'Deriv Rise/Fall Trading App',
-    description: 'A white-label trading application powered by Deriv',
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+    },
     ...(faviconUri ? { icons: { icon: faviconUri } } : {}),
   };
 }
@@ -39,15 +39,18 @@ const fontClass =
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const logoSrc = getLogoSrc();
   return (
-    <html lang="en" className="h-full lg:h-auto" suppressHydrationWarning>
+    <html lang="en" className="h-full w-full overflow-hidden" suppressHydrationWarning>
       <body
-        className={`${fontClass} ${ibmPlexSans.variable} bg-background flex min-h-dvh flex-col overflow-hidden max-lg:h-dvh max-lg:overflow-hidden lg:block lg:h-auto lg:min-h-screen lg:overflow-x-hidden lg:overflow-y-auto`}
+        className={`${fontClass} ${ibmPlexSans.variable} h-full w-full overflow-hidden bg-background flex flex-col items-center justify-start text-foreground antialiased`}
       >
-        <TemplateI18nProvider>
-          <TemplateLayout>
-            <LogoSrcProvider logoSrc={logoSrc}>{children}</LogoSrcProvider>
-          </TemplateLayout>
-        </TemplateI18nProvider>
+        <SplashScreen logoSrc={logoSrc} />
+        <div className="w-full h-full max-w-md mx-auto flex flex-col flex-1 min-h-0 overflow-hidden bg-background relative">
+          <TemplateI18nProvider>
+            <TemplateLayout>
+              <LogoSrcProvider logoSrc={logoSrc}>{children}</LogoSrcProvider>
+            </TemplateLayout>
+          </TemplateI18nProvider>
+        </div>
       </body>
     </html>
   );

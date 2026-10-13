@@ -131,6 +131,7 @@ export interface UseAuthReturn {
   wsUrl: string | undefined;
   login: () => Promise<void>;
   signUp: () => Promise<void>;
+  loginAsDemo: () => void;
   logout: () => void;
   switchAccount: (accountId: string) => Promise<void>;
   updateAccountBalance: (accountId: string, balance: string, currency?: string) => void;
@@ -337,6 +338,25 @@ export function useAuth(): UseAuthReturn {
     await initiateSignUp(await getAuthConfigWithReferral(currentLang));
   }, [currentLang]);
 
+  // Instant demo practice mode login — provides $10,000 USD practice capital for bot testing
+  const loginAsDemo = useCallback(() => {
+    const demoAccount: DerivAccount = {
+      account_id: 'VRTC9284102',
+      currency: 'USD',
+      balance: '10000.00',
+      account_type: 'demo',
+      group: 'demo',
+      status: 'active',
+    };
+    storeDerivAccounts([demoAccount]);
+    setActiveLoginId(demoAccount.account_id);
+    setAccountType('demo');
+    setAccounts([demoAccount]);
+    setActiveAccountId(demoAccount.account_id);
+    setAuthState('authenticated');
+    setError(null);
+  }, []);
+
   // Logout: close WS (handled by useDerivWS cleanup), clear storage, reset state
   const logout = useCallback(() => {
     coreLogout();
@@ -406,6 +426,7 @@ export function useAuth(): UseAuthReturn {
     wsUrl,
     login,
     signUp,
+    loginAsDemo,
     logout,
     switchAccount,
     updateAccountBalance,

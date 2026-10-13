@@ -70,74 +70,9 @@ export function ConfigurableBuyButton({
   onBuy,
   isBuying,
 }: ConfigurableBuyButtonProps) {
-  const { localize } = useAppTranslations();
-
-  const disabled = !isConnected || !proposal || isBuying;
-  const payout = proposal ? proposal.payout.toFixed(2) : null;
-
-  const variants: Record<StyleVariant, () => React.ReactNode> = {
-    // a — pill (default)
-    a: () => (
-      <Button
-        className="w-full rounded-full bg-primary hover:bg-primary/90 text-primary-foreground"
-        size="lg"
-        disabled={disabled}
-        onClick={onBuy}
-      >
-        {isBuying ? (
-          <Localize i18n_default_text="Purchasing..." />
-        ) : (
-          <span className="flex flex-col items-center leading-tight gap-0.5">
-            <span><Localize i18n_default_text="Buy" /></span>
-            {payout && (
-              <span className="text-xs font-normal opacity-90">
-                <Localize i18n_default_text="Payout {{payout}} USD" values={{ payout }} />
-              </span>
-            )}
-          </span>
-        )}
-      </Button>
-    ),
-    // Block — squared, bold, payout shown as a badge on the right.
-    b: () => (
-      <Button
-        className="w-full h-14 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground text-base font-bold"
-        disabled={disabled}
-        onClick={onBuy}
-      >
-        <span className="flex w-full items-center justify-between px-1">
-          <span>{isBuying ? localize('Purchasing...') : localize('Buy')}</span>
-          {payout && (
-            <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-medium">
-              {payout} USD
-            </span>
-          )}
-        </span>
-      </Button>
-    ),
-    // Gradient with an upward-trend icon + payout below.
-    c: () => (
-      <Button
-        className="w-full h-14 rounded-xl bg-gradient-to-r from-primary to-primary/70 hover:opacity-90 text-primary-foreground shadow-lg shadow-primary/20"
-        disabled={disabled}
-        onClick={onBuy}
-      >
-        <span className="flex flex-col items-center leading-tight gap-0.5">
-          <span className="flex items-center gap-1.5 font-semibold">
-            <TrendingUp className="h-4 w-4" />
-            {isBuying ? localize('Purchasing...') : localize('Buy')}
-          </span>
-          {payout && (
-            <span className="text-xs font-normal opacity-90">
-              <Localize i18n_default_text="Payout {{payout}} USD" values={{ payout }} />
-            </span>
-          )}
-        </span>
-      </Button>
-    ),
-  };
-  return (variants[variant] ?? variants.a)();
+  return null;
 }
+
 
 export interface ConfigurableTradeControlsProps {
   config: RiseFallAppConfig;

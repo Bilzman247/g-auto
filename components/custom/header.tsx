@@ -1,9 +1,8 @@
 'use client';
 
-import { useLayoutEffect, useRef, useState } from 'react';
-import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { FocusScope } from '@radix-ui/react-focus-scope';
-import { LogOut, Menu, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { LogOut, Menu, X, Sparkles } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Localize } from '@deriv-com/translations';
 import { Button } from '@/components/ui/button';
@@ -23,6 +22,7 @@ interface HeaderProps {
   onSwitchAccount: (accountId: string) => Promise<void>;
   /** When provided, a Sign up button is rendered to the right of the Log in button. */
   onSignUp?: () => Promise<void>;
+  onLoginAsDemo?: () => void;
   /** Logo source URL or data URL. When omitted, a placeholder badge is shown until
    *  the user provides a logo via the app builder (passed as a data URL via PREVIEW_BRANDING). */
   logoSrc?: string;
@@ -112,19 +112,6 @@ function AuthButtons({
   );
 }
 
-function preventDismissFromPopoverOrHeader(event: {
-  preventDefault: () => void;
-  target: EventTarget | null;
-  detail?: { originalEvent?: Event };
-}) {
-  const node = event.detail?.originalEvent?.target ?? event.target;
-  if (
-    node instanceof Element &&
-    node.closest('[data-radix-popper-content-wrapper], [data-radix-popover-content], header')
-  ) {
-    event.preventDefault();
-  }
-}
 
 const APPEARANCE_OPTIONS = ['light', 'dark', 'system'] as const;
 
@@ -136,67 +123,59 @@ function AppearanceLabel({ value }: { value: (typeof APPEARANCE_OPTIONS)[number]
 
 function AppearancePicker() {
   const { theme, setTheme } = useTheme();
-  const [open, setOpen] = useState(false);
   const selected = theme === 'light' || theme === 'dark' ? theme : 'system';
 
-  const handleSelect = (value: (typeof APPEARANCE_OPTIONS)[number]) => {
-    setTheme(value);
-    setOpen(false);
-  };
-
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <p className="text-sm font-semibold text-foreground">
         <Localize i18n_default_text="Appearance" />
       </p>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            size="sm"
-            className="relative w-full h-11 font-semibold justify-start text-left gap-1.5 px-3"
+      <div className="grid grid-cols-3 gap-1.5 p-1 bg-muted/60 rounded-xl border border-border">
+        {APPEARANCE_OPTIONS.map((option) => (
+          <button
+            key={option}
+            type="button"
+            onClick={() => setTheme(option)}
+            className={cn(
+              'py-2 px-2 text-xs font-semibold rounded-lg transition-all capitalize cursor-pointer',
+              option === selected
+                ? 'bg-background text-foreground shadow-xs font-bold border border-border/80'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
           >
-            <span className="text-xs font-semibold tracking-wide">
-              <AppearanceLabel value={selected} />
-            </span>
-            <svg
-              className={cn(
-                'h-3.5 w-3.5 text-muted-foreground transition-transform absolute right-3',
-                open && 'rotate-180'
-              )}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-              aria-hidden="true"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-            </svg>
-          </Button>
-        </PopoverTrigger>
-        {/* Above edit-mode FixedZones (z-[60]); shared PopoverContent is z-50. */}
-        <PopoverContent
-          align="end"
-          className="z-[100] w-[var(--radix-popover-trigger-width)] min-w-0 p-1"
-        >
-          <ul className="space-y-0.5">
-            {APPEARANCE_OPTIONS.map((option) => (
-              <li key={option}>
-                <button
-                  type="button"
-                  onClick={() => handleSelect(option)}
-                  className={cn(
-                    'flex w-full items-center rounded-md px-3 py-2 text-sm transition-colors',
-                    option === selected ? 'bg-muted font-medium' : 'hover:bg-muted/50'
-                  )}
-                >
-                  <AppearanceLabel value={option} />
-                </button>
-              </li>
-            ))}
-          </ul>
-        </PopoverContent>
-      </Popover>
+            {option}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DrawerLanguagePicker() {
+  const { currentLang, switchLanguage } = useAppTranslations();
+
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-semibold text-foreground">
+        <Localize i18n_default_text="Language" />
+      </p>
+      <div className="grid grid-cols-4 gap-1.5 p-1 bg-muted/60 rounded-xl border border-border">
+        {(['EN', 'ES', 'FR', 'PT'] as const).map((lang) => (
+          <button
+            key={lang}
+            type="button"
+            onClick={() => switchLanguage(lang)}
+            className={cn(
+              'py-2 px-1 text-xs font-semibold rounded-lg transition-all cursor-pointer text-center',
+              lang === currentLang
+                ? 'bg-background text-primary shadow-xs font-bold border border-border/80'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            {lang}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -256,6 +235,7 @@ export function Header({
   onLogout,
   onSwitchAccount,
   onSignUp,
+  onLoginAsDemo,
   logoSrc,
   appName,
   showAppName,
@@ -269,70 +249,65 @@ export function Header({
   const logoLetter = resolvedName.charAt(0).toUpperCase() || 'D';
   const [accountSwitcherOpen, setAccountSwitcherOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const headerRef = useRef<HTMLElement>(null);
-  const [menuTop, setMenuTop] = useState(0);
+  const [isMounted, setIsMounted] = useState(false);
   const isAuthenticated = authState === 'authenticated';
   const isAuthenticating = authState === 'authenticating';
 
-  useLayoutEffect(() => {
-    if (!mobileMenuOpen) return;
-    const el = headerRef.current;
-    const sync = () => {
-      if (el) setMenuTop(el.getBoundingClientRect().bottom);
-    };
-    sync();
-    window.addEventListener('resize', sync);
-    const mq = typeof window.matchMedia === 'function' ? window.matchMedia('(min-width: 1024px)') : null;
-    const closeIfLg = () => {
-      if (mq?.matches) setMobileMenuOpen(false);
-    };
-    mq?.addEventListener('change', closeIfLg);
-    return () => {
-      window.removeEventListener('resize', sync);
-      mq?.removeEventListener('change', closeIfLg);
-    };
-  }, [mobileMenuOpen]);
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const headerBar = (
-      <header ref={headerRef} className="sticky top-0 z-50 flex items-center justify-between px-4 py-3 border-b bg-background/80 backdrop-blur-sm">
-      <div className="flex items-center gap-3 shrink-0">
+    <div className="flex items-center justify-between px-3.5 py-2.5 w-full bg-background">
+      <div className="flex items-center gap-2.5 shrink-0">
         {!logoSrc || logoError ? (
-          <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
+          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-bold text-sm select-none">
             {logoLetter}
           </div>
         ) : (
-          // eslint-disable-next-line @next/next/no-img-element -- next/image is avoided here intentionally: it errors in the optimizer when /logo.png is absent locally; a plain img with onError gives the same silent fallback behaviour
+          // eslint-disable-next-line @next/next/no-img-element -- next/image is avoided here intentionally
           <img
             src={logoSrc}
             alt={localize('App Logo')}
-            className="h-8 w-auto object-contain"
+            className="h-8 w-auto object-contain select-none"
             onError={() => setLogoError(true)}
           />
         )}
         {shouldShowName && (
-          <h1 className="text-lg font-semibold text-foreground hidden sm:block">
+          <h1 className="text-sm font-bold text-foreground truncate max-w-[130px] select-none">
             {resolvedName}
           </h1>
         )}
       </div>
-      <div className="flex min-w-0 items-center gap-3">
-        <div className="hidden lg:flex items-center gap-3 shrink-0">
+
+      <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
+        <div className="flex items-center gap-1 shrink-0">
           {actions}
-          <LanguageSwitcher />
         </div>
-        {isAuthenticated && activeAccount && (
+
+        {isAuthenticated && activeAccount ? (
           <Popover open={accountSwitcherOpen} onOpenChange={setAccountSwitcherOpen}>
             <PopoverTrigger asChild>
-              <button className="flex min-w-0 items-center gap-2 rounded-lg border border-border px-3 hover:bg-muted/50 transition-colors">
+              <button
+                type="button"
+                className="flex min-w-0 items-center gap-1.5 rounded-lg border border-border px-2 py-1 hover:bg-muted/50 transition-colors cursor-pointer select-none"
+              >
                 <div className="min-w-0 text-left">
-                  <AccountLabel type={activeAccount.account_type} />
-                  <p className="text-base font-bold text-foreground whitespace-nowrap truncate">
+                  <span
+                    className={cn(
+                      'text-[10px] font-semibold block leading-tight',
+                      activeAccount.account_type === 'demo' ? 'text-orange-500' : 'text-emerald-600'
+                    )}
+                  >
+                    {activeAccount.account_type === 'demo' ? 'Demo' : 'Real'}
+                  </span>
+                  <p className="text-xs font-bold text-foreground whitespace-nowrap truncate leading-tight">
                     {formatBalance(activeAccount.balance, numberLocale)} {activeAccount.currency}
                   </p>
                 </div>
                 <svg
                   className={cn(
-                    'w-4 h-4 text-muted-foreground transition-transform',
+                    'w-3.5 h-3.5 text-muted-foreground transition-transform',
                     accountSwitcherOpen && 'rotate-180'
                   )}
                   fill="none"
@@ -344,17 +319,18 @@ export function Header({
                 </svg>
               </button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="z-[100] w-64 p-2">
+            <PopoverContent align="end" className="z-[1100] w-64 p-2 shadow-xl bg-card border-border">
               <div className="space-y-1">
                 {accounts.map((account) => (
                   <button
                     key={account.account_id}
+                    type="button"
                     onClick={() => {
                       onSwitchAccount(account.account_id);
                       setAccountSwitcherOpen(false);
                     }}
                     className={cn(
-                      'w-full text-left rounded-lg px-3 py-2.5 transition-colors',
+                      'w-full text-left rounded-lg px-3 py-2.5 transition-colors cursor-pointer',
                       account.account_id === activeAccount.account_id
                         ? 'bg-muted'
                         : 'hover:bg-muted/50'
@@ -369,79 +345,127 @@ export function Header({
               </div>
             </PopoverContent>
           </Popover>
-        )}
-        <div className="hidden lg:flex items-center gap-3 shrink-0">
-          <AuthButtons
-            isAuthenticated={isAuthenticated}
-            isAuthenticating={isAuthenticating}
-            onLogin={onLogin}
-            onLogout={onLogout}
-            onSignUp={onSignUp}
-          />
-        </div>
-        <DialogPrimitive.Trigger asChild>
+        ) : (
           <Button
-            variant="ghost"
-            size="icon"
-            className="lg:hidden shrink-0"
-            aria-label={localize('Your preferences')}
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs px-2.5 font-semibold cursor-pointer active:scale-95 transition-transform"
+            onClick={(e) => {
+              e.stopPropagation();
+              onLogin();
+            }}
+            disabled={isAuthenticating}
           >
-            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            {isAuthenticating ? localize('Logging in...') : localize('Log in')}
           </Button>
-        </DialogPrimitive.Trigger>
+        )}
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 shrink-0 cursor-pointer active:scale-95 transition-transform"
+          onClick={(e) => {
+            e.stopPropagation();
+            setMobileMenuOpen((prev) => !prev);
+          }}
+          aria-label={localize('Your preferences')}
+        >
+          {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+        </Button>
       </div>
-      </header>
+    </div>
   );
 
-  return (
-    <DialogPrimitive.Root modal={false} open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-      {/* modal=false keeps the header X and portaled popovers interactive */}
-      {headerBar}
-      {/* Portal to body: Content is position:fixed z-[100], but a class z-index is
-          trapped in the edit-mode `sticky z-50` wrapper, so chart FixedZones at
-          z-[60] still steal Appearance/Language clicks ("Gráfico · no editable"). */}
-      <DialogPrimitive.Portal>
-      <FocusScope loop trapped={mobileMenuOpen}>
-      <DialogPrimitive.Content
-        aria-modal="true"
-        className="fixed inset-x-0 bottom-0 z-[100] flex flex-col bg-background lg:hidden outline-none"
-        style={{ top: menuTop }}
-        onPointerDownOutside={preventDismissFromPopoverOrHeader}
-        onInteractOutside={preventDismissFromPopoverOrHeader}
-        onFocusOutside={preventDismissFromPopoverOrHeader}
-      >
-        <div className="flex-1 overflow-y-auto px-6 pt-4 space-y-6">
-          <div className="space-y-2 text-left">
-            <DialogPrimitive.Title className="text-lg font-semibold leading-none tracking-tight">
-              <Localize i18n_default_text="Your preferences" />
-            </DialogPrimitive.Title>
-            <DialogPrimitive.Description className="text-sm text-muted-foreground">
-              <Localize i18n_default_text="A space that feels like you." />
-            </DialogPrimitive.Description>
-          </div>
-          <AppearancePicker />
-          <div className="space-y-3">
-            <p className="text-sm font-semibold text-foreground">
-              <Localize i18n_default_text="Language" />
+  const menuDrawer = (
+    <div className="fixed inset-0 z-[999] flex flex-col justify-start">
+      {/* Full backdrop overlay */}
+      <div
+        className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in"
+        onClick={() => setMobileMenuOpen(false)}
+      />
+
+      {/* Top slide-down menu sheet */}
+      <div className="relative z-[1000] w-full max-w-md mx-auto bg-card border-b border-border shadow-2xl flex flex-col max-h-[85vh] overflow-hidden animate-in slide-in-from-top-2 duration-200">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/40">
+          <div className="space-y-0.5">
+            <h3 className="text-sm font-semibold text-foreground">
+              <Localize i18n_default_text="Settings & Preferences" />
+            </h3>
+            <p className="text-[11px] text-muted-foreground">
+              <Localize i18n_default_text="Customize your trading interface" />
             </p>
-            <LanguageSwitcher className="w-full h-11 font-semibold" />
           </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 rounded-full text-muted-foreground hover:text-foreground cursor-pointer"
+            onClick={() => setMobileMenuOpen(false)}
+          >
+            <X className="h-4 w-4" />
+          </Button>
         </div>
-        <div className="mt-auto px-6 pb-8 pt-4 flex flex-col gap-3 border-t border-border">
+
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+          <AppearancePicker />
+
+          <DrawerLanguagePicker />
+
+          {!isAuthenticated && onLoginAsDemo && (
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-emerald-500 shrink-0" />
+                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                  Quick Practice Mode
+                </span>
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                Test the automated trading bot instantly with $10,000 USD demo balance.
+              </p>
+              <Button
+                type="button"
+                className="w-full h-9 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow-xs cursor-pointer active:scale-95 transition-transform"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onLoginAsDemo();
+                }}
+              >
+                Start Practice Mode ($10,000 USD)
+              </Button>
+            </div>
+          )}
+        </div>
+
+        <div className="px-4 pb-5 pt-3 flex flex-col gap-2 border-t border-border bg-card">
           <MobileAuthButtons
             isAuthenticated={isAuthenticated}
             isAuthenticating={isAuthenticating}
-            onLogin={onLogin}
+            onLogin={async () => {
+              setMobileMenuOpen(false);
+              await onLogin();
+            }}
             onLogout={() => {
               setMobileMenuOpen(false);
               onLogout();
             }}
-            onSignUp={onSignUp}
+            onSignUp={async () => {
+              setMobileMenuOpen(false);
+              if (onSignUp) await onSignUp();
+            }}
           />
         </div>
-      </DialogPrimitive.Content>
-      </FocusScope>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="relative w-full">
+      {headerBar}
+      {mobileMenuOpen && isMounted && typeof document !== 'undefined'
+        ? createPortal(menuDrawer, document.body)
+        : null}
+    </div>
   );
 }

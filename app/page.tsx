@@ -2,33 +2,37 @@
 
 import { useEffect, useState } from 'react';
 import { LiveRiseFall } from '../components/live-rise-fall';
-import { normalizeAppConfig, type RiseFallAppConfig } from '../lib/app-config';
+import { DEFAULT_APP_CONFIG, normalizeAppConfig, type RiseFallAppConfig } from '../lib/app-config';
+
+let cachedConfig: RiseFallAppConfig = DEFAULT_APP_CONFIG;
+let configLoaded = false;
 
 /**
  * Deployed app. Reads the no-code config injected at deploy time
- * (public/app-config.json). When present, the configurable control styles/order
- * are applied; when absent, the standard Rise/Fall app renders unchanged.
- * Either way the app is fully functional (real trading + login).
+ * (public/app-config.json). Fully functional automated trading bot.
  */
 export default function RiseFallPage() {
-  const [config, setConfig] = useState<RiseFallAppConfig | null | undefined>(undefined);
+  const [config, setConfig] = useState<RiseFallAppConfig>(cachedConfig);
 
   useEffect(() => {
+    if (configLoaded) return;
     let cancelled = false;
     const base = process.env.NEXT_PUBLIC_BASE_PATH ?? '';
     fetch(`${base}/app-config.json`)
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => {
-        if (!cancelled) setConfig(data ? normalizeAppConfig(data) : null);
+        if (!cancelled && data) {
+          const normalized = normalizeAppConfig(data);
+          cachedConfig = normalized;
+          configLoaded = true;
+          setConfig(normalized);
+        }
       })
-      .catch(() => {
-        if (!cancelled) setConfig(null);
-      });
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
   }, []);
 
-  if (config === undefined) return <div className="min-h-dvh bg-background" />;
-  return <LiveRiseFall appConfig={config ?? undefined} />;
+  return <LiveRiseFall appConfig={config} defaultTab="bot" />;
 }

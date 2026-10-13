@@ -1,4 +1,4 @@
-# Rise/Fall Trading App
+# G-squad - Rise/Fall Trading App
 
 A self-hosted Rise/Fall trading app built on the Deriv WebSocket API. Supports CALL (Rise) and PUT (Fall) contract types with an interactive SmartCharts chart, real-time tick streaming, and open/closed position management.
 
@@ -10,25 +10,25 @@ A self-hosted Rise/Fall trading app built on the Deriv WebSocket API. Supports C
 
 1. Log in to your Deriv account and go to the [API Token page](https://app.deriv.com/account/api-token) to create a token with the required scopes.
 2. Navigate to [App Registration](https://developers.deriv.com/dashboard/) and register a new application.
-3. Set the **Redirect URI** to the URL where you will host this app (e.g. `http://localhost:3000` for local development).
+3. Set the **Redirect URI** to the URL where you will host this app (e.g. `https://g-squad.buzz` or `http://localhost:3000` for local development).
 4. Copy the **App ID** shown after registration — you will need it in the next step.
 
-## Step 2: Configure `.env.production`
+## Step 2: Configure Environment
 
-Copy `.env.example` to `.env.production` and fill in your values:
+Copy `.env.example` to `.env.production` / `.env.local`:
 
 ```bash
-cp .env.example .env.production
+cp .env.example .env.local
 ```
 
-Edit `.env.production`:
+Configured `.env` settings:
 
 ```env
-NEXT_PUBLIC_DERIV_APP_ID=your_app_id_here
-NEXT_PUBLIC_DERIV_REDIRECT_URI=https://your-registered-redirect-uri.com
-NEXT_PUBLIC_DERIV_APP_NAME=your_app_name_here
+NEXT_PUBLIC_DERIV_APP_ID=33E1sj7WNaMsjg5MAxPyS
+NEXT_PUBLIC_DERIV_REDIRECT_URI=https://g-squad.buzz
+NEXT_PUBLIC_DERIV_APP_NAME=G-squad
 NEXT_PUBLIC_DERIV_SHOW_APP_NAME=true
-NEXT_PUBLIC_DERIV_REFERRAL_LINK=your_referral_link_here
+NEXT_PUBLIC_DERIV_REFERRAL_LINK=https://t.deriv.link?t=AJAQ5SJZLES4
 NEXT_PUBLIC_DERIV_OAUTH_SCOPES=trade,account_manage
 NEXT_PUBLIC_DERIV_ENV=production
 ```

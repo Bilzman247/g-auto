@@ -7,8 +7,6 @@
  * editor (/edit) so the editor preview is fully live.
  */
 
-import { useSmartChartsApi } from '@/hooks/use-smartcharts-api';
-import { useSmartChartChartData } from '@/hooks/use-smartchart-chart-data';
 import { useRiseFallTrading } from '../hooks/use-rise-fall-trading';
 import { useDerivWSContext } from '@/components/custom/deriv-ws-provider';
 import { useLogoSrc } from '@/components/custom/logo-src-provider';
@@ -25,6 +23,7 @@ export function LiveRiseFall({
   logoSrc: logoSrcOverride,
   appName,
   showAppName,
+  defaultTab,
 }: {
   appConfig?: RiseFallAppConfig;
   editMode?: boolean;
@@ -36,11 +35,12 @@ export function LiveRiseFall({
   logoSrc?: string;
   appName?: string;
   showAppName?: boolean;
+  defaultTab?: 'bot' | 'dashboard' | 'reports';
 }) {
   const providerLogo = useLogoSrc();
   const logoSrc = logoSrcOverride ?? providerLogo;
   const { ws, isConnected, isExhausted, auth } = useDerivWSContext();
-  const { authState, accounts, activeAccount, login, signUp, logout, switchAccount } = auth;
+  const { authState, accounts, activeAccount, login, signUp, loginAsDemo, logout, switchAccount } = auth;
 
   const trading = useRiseFallTrading({
     ws,
@@ -50,8 +50,9 @@ export function LiveRiseFall({
     onAuthWSFailed: logout,
   });
 
-  const { chartData } = useSmartChartChartData(trading.ws, trading.isConnected, trading.symbols);
-  const { getQuotes, subscribeQuotes, unsubscribeQuotes } = useSmartChartsApi(trading.ws);
+  const getQuotes = async () => [];
+  const subscribeQuotes = () => {};
+  const unsubscribeQuotes = () => {};
 
   return (
     <RiseFallView
@@ -60,8 +61,10 @@ export function LiveRiseFall({
       activeAccount={activeAccount}
       onLogin={login}
       onSignUp={signUp}
+      onLoginAsDemo={loginAsDemo}
       onLogout={logout}
       onSwitchAccount={switchAccount}
+      defaultTab={defaultTab}
       logoSrc={logoSrc}
       appName={appName}
       showAppName={showAppName}
@@ -98,7 +101,7 @@ export function LiveRiseFall({
       openPositions={trading.openPositions}
       sellContract={trading.sellContract}
       sellingId={trading.sellingId}
-      chartData={chartData}
+      chartData={undefined}
       getQuotes={getQuotes}
       subscribeQuotes={subscribeQuotes}
       unsubscribeQuotes={unsubscribeQuotes}

@@ -218,31 +218,7 @@ export function TradeControls({
         )}
       </div>
 
-      {/* Buy button — inline on desktop, fixed above footer on mobile */}
-      <div className="max-lg:fixed max-lg:bottom-[calc(env(safe-area-inset-bottom)+2.5rem)] max-lg:left-3 max-lg:right-3 lg:static">
-        <Button
-          className="w-full rounded-full bg-primary hover:bg-primary/90 text-primary-foreground"
-          size="lg"
-          disabled={!isConnected || !proposal || isBuying}
-          onClick={onBuy}
-        >
-          {isBuying ? (
-            <Localize i18n_default_text="Purchasing..." />
-          ) : (
-            <span className="flex flex-col items-center leading-tight gap-0.5">
-              <span><Localize i18n_default_text="Buy" /></span>
-              {proposal && (
-                <span className="text-xs font-normal opacity-90">
-                  <Localize
-                    i18n_default_text="Payout {{payout}} USD"
-                    values={{ payout: proposal.payout.toFixed(2) }}
-                  />
-                </span>
-              )}
-            </span>
-          )}
-        </Button>
-      </div>
+
 
       {/* View your positions — shown when authenticated */}
       {isAuthenticated && (
