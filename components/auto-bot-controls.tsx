@@ -293,34 +293,13 @@ export function AutoBotControls({
         </div>
       </div>
 
-      {/* Bot Strategy & Parameters Settings */}
+      {/* Bot Parameters Settings (Stake & Risk Management) */}
       <div className="rounded-xl border border-border bg-card p-3 sm:p-4 space-y-3 shadow-sm">
         <div className="flex items-center justify-between border-b border-border pb-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Bot Configuration
           </span>
-          <span className="text-[11px] text-muted-foreground">Real-time parameters</span>
-        </div>
-
-        {/* Strategy Picker */}
-        <div className="space-y-1.5">
-          <Label className="text-xs font-medium text-foreground">Trading Strategy</Label>
-          <Select
-            value={config.strategy}
-            onValueChange={(val) => updateConfig({ strategy: val as BotStrategy })}
-          >
-            <SelectTrigger className="w-full text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="trend">📈 Trend Momentum (Follow price movement)</SelectItem>
-              <SelectItem value="reversal">🔄 Mean Reversion (Contrarian reversal)</SelectItem>
-              <SelectItem value="follow_winner">🏆 Follow Winner (Repeat wins, flip on loss)</SelectItem>
-              <SelectItem value="alternating">🔀 Alternating (Alternate Rise and Fall)</SelectItem>
-              <SelectItem value="always_rise">⬆️ Always Rise (CALL contracts)</SelectItem>
-              <SelectItem value="always_fall">⬇️ Always Fall (PUT contracts)</SelectItem>
-            </SelectContent>
-          </Select>
+          <span className="text-[11px] text-muted-foreground">Stake & Risk Settings</span>
         </div>
 
         {/* Stake and Martingale */}
@@ -402,47 +381,6 @@ export function AutoBotControls({
                 if (!isNaN(val) && val > 0) updateConfig({ stopLoss: val });
               }}
               className="text-xs border-destructive/30 focus-visible:ring-destructive"
-            />
-          </div>
-        </div>
-
-        {/* Duration and Equals */}
-        <div className="grid grid-cols-2 gap-2 sm:gap-3 items-end">
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Contract Duration</Label>
-            <Select
-              value={`${config.duration}${config.durationUnit}`}
-              disabled={isRunning}
-              onValueChange={(val) => {
-                const unit = val.slice(-1) as DurationSelectUnit;
-                const dur = parseInt(val.slice(0, -1), 10);
-                updateConfig({ duration: dur, durationUnit: unit });
-              }}
-            >
-              <SelectTrigger className="text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="1t">1 Tick</SelectItem>
-                <SelectItem value="2t">2 Ticks</SelectItem>
-                <SelectItem value="5t">5 Ticks</SelectItem>
-                <SelectItem value="10t">10 Ticks</SelectItem>
-                <SelectItem value="15s">15 Seconds</SelectItem>
-                <SelectItem value="30s">30 Seconds</SelectItem>
-                <SelectItem value="1m">1 Minute</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex items-center justify-between pb-2">
-            <Label htmlFor="bot-allow-equals" className="text-xs cursor-pointer">
-              Allow Equals
-            </Label>
-            <Switch
-              id="bot-allow-equals"
-              checked={config.allowEquals}
-              disabled={isRunning}
-              onCheckedChange={(val) => updateConfig({ allowEquals: val })}
             />
           </div>
         </div>

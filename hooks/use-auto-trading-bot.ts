@@ -69,7 +69,7 @@ export function useAutoTradingBot({
     takeProfit: 20.0,
     stopLoss: 10.0,
     strategy: 'trend',
-    duration: 1,
+    duration: 5,
     durationUnit: 't',
     allowEquals: false,
     maxConsecutiveLosses: 5,
@@ -286,14 +286,44 @@ export function useAutoTradingBot({
     isExecutingRef.current = true;
     setStatus('ANALYZING');
 
-    const direction = determineDirection();
+    addLog(
+      'info',
+      `🔍 Analyzing ${symbol.underlying_symbol_name || symbol.underlying_symbol} market momentum...`
+    );
+
+    let direction: Direction = 'CALL';
+    try {
+      const res = await fetch('/api/gemini/filter-signal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prices: pricesRef.current }),
+      });
+      const data = await res.json();
+      if (!data.shouldTrade) {
+        addLog('info', '⏳ Market consolidating / waiting for optimal conditions...');
+        isExecutingRef.current = false;
+        setStatus('ANALYZING');
+        if (isRunningRef.current) {
+          cooldownTimerRef.current = setTimeout(() => {
+            if (isRunningRef.current) {
+              executeNextTradeRef.current();
+            }
+          }, 3000);
+        }
+        return;
+      }
+      direction = data.direction === 'PUT' ? 'PUT' : 'CALL';
+    } catch {
+      direction = determineDirection();
+    }
+
     lastDirectionRef.current = direction;
     const stakeToUse = currentStakeRef.current;
     const contractType = cfg.allowEquals ? `${direction}E` : direction;
 
     addLog(
       'info',
-      `🔍 Analyzing ${symbol.underlying_symbol_name || symbol.underlying_symbol} signal... Selected: ${direction} ($${stakeToUse.toFixed(2)})`
+      `⚡ Signal validated: Executing ${direction} ($${stakeToUse.toFixed(2)}) 5-tick contract`
     );
 
     try {
